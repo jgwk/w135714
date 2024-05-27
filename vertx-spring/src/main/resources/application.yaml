@@ -1,0 +1,9 @@
+spring:
+  data:
+    mongodb:
+      port: 8082
+      database: blog
+  mongodb:
+    embedded:
+      version: 5.0.5
+

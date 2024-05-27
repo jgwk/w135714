@@ -39,3 +39,15 @@ subprojects {
     }
 
 }
+
+project("vertx-spring") {
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-web:2.6.15") {
+            exclude(group = "org.springframework.boot", module = "spring-boot-starter-tomcat")
+        }
+        implementation("org.springframework.boot:spring-boot-starter-data-mongodb:2.6.15")
+        // implementation("org.springframework.boot:spring-boot-starter-data-jpa:2.6.15")
+
+        implementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo:3.5.4")
+    }
+}
