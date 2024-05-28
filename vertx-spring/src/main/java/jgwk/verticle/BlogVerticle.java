@@ -1,28 +1,21 @@
 package jgwk.verticle;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.json.Json;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Handler;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
-import jgwk.document.Post;
-import jgwk.service.BlogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
 @Component
 public class BlogVerticle extends AbstractVerticle {
-    private final BlogService blogService;
-
-    private static final String POST_GET_ALL = "post.get.all";
-    private static final String POST_ADD = "post.add";
-
-    // TODO 다큐먼트가 직접 노출되지 않도록, 매퍼 추가
     @Override
     public void start() {
         Router router = Router.router(vertx);
@@ -31,79 +24,54 @@ public class BlogVerticle extends AbstractVerticle {
         // 글 전체 조회
         router
             .get("/api/post")
-            .handler(context -> vertx.eventBus()
-                .<String>request(POST_GET_ALL, null, message -> {
-                    if (message.succeeded()) {
-                        context
-                            .response()
-                            .end(message.result().body());
-                    } else {
-                        context
-                            .response()
-                            .setStatusCode(500)
-                            .end();
-                    }
-            }));
-
-        vertx.eventBus()
-            .consumer(POST_GET_ALL, message -> {
-                List<Post> postList = blogService.getAllPosts();
-                message.reply(Json.encode(postList));
-            });
+            .handler(rc ->
+                vertx.eventBus()
+                    .request(BlogWorker.POST_GET_ALL, null, defaultHandler(rc))
+            );
 
         // 글 등록
         router
             .post("/api/post")
-            .handler(context -> vertx.eventBus()
-                .<String>request(POST_ADD, context.getBodyAsJson(), message -> {
-                    if (message.succeeded()) {
-                        context
-                            .response()
-                            .end(message.result().body());
-                    } else {
-                        context
-                            .response()
-                            .setStatusCode(500)
-                            .end();
-                    }
-                }));
+            .handler(rc -> {
+                JsonObject root = new JsonObject();
+                JsonObject body = rc.getBodyAsJson();
+                root.put("body", body);
 
-        vertx.eventBus()
-            .consumer(POST_ADD, message -> {
-                JsonObject postJson = (JsonObject) message.body();
-
-                Post post = new Post();
-                post.setPostId(System.currentTimeMillis());
-                post.setTitle(postJson.getString("title"));
-                post.setContent(postJson.getString("content"));
-
-                blogService.addPost(post);
-                message.reply(Json.encode(post));
+                vertx.eventBus()
+                    .request(BlogWorker.POST_ADD, root, defaultHandler(rc));
             });
 
         // 글 수정
         router
             .put("/api/post/:postId")
-            .handler(context -> {
-                Long postId = Long.valueOf(context.request().getParam("postId"));
-                JsonObject postJson = context.getBodyAsJson();
+            .handler(rc -> {
+                JsonObject root = new JsonObject();
+                JsonObject param = new JsonObject();
+                root.put("param", param);
 
-                Post post = blogService.getPost(postId);
-                post.setTitle(postJson.getString("title"));
-                post.setContent(postJson.getString("content"));
+                Long postId = Long.valueOf(rc.request().getParam("postId"));
+                param.put("postId", postId);
 
-                blogService.updatePost(post);
+                JsonObject body = rc.getBodyAsJson();
+                root.put("body", body);
 
-                context.json(post);
+                vertx.eventBus()
+                    .request(BlogWorker.POST_UPDATE, root, defaultHandler(rc));
             });
 
         // 글 삭제
         router
             .delete("/api/post/:postId")
-            .handler(context -> {
-                Long postId = Long.valueOf(context.request().getParam("postId"));
+            .handler(rc -> {
+                JsonObject root = new JsonObject();
+                JsonObject param = new JsonObject();
+                root.put("param", param);
 
-                blogService.deletePost(postId);
+                Long postId = Long.valueOf(rc.request().getParam("postId"));
+                param.put("postId", postId);
+
+                vertx.eventBus()
+                    .request(BlogWorker.POST_DELETE, root, defaultHandler(rc));
             });
 
         vertx.createHttpServer()
@@ -111,4 +79,19 @@ public class BlogVerticle extends AbstractVerticle {
             .listen();
     }
 
+    private Handler<AsyncResult<Message<String>>> defaultHandler(RoutingContext rc) {
+        return message -> {
+            if (message.succeeded()) {
+                if (message.result().body() != null) {
+                    rc.response().end(message.result().body());
+                }
+                else {
+                    rc.response().end();
+                }
+            }
+            else {
+                rc.response().setStatusCode(500).end();
+            }
+        };
+    }
 }
