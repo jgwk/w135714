@@ -3,7 +3,16 @@ spring:
     mongodb:
       port: 8082
       database: blog
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.mongo.embedded.EmbeddedMongoAutoConfiguration
+
+---
+spring:
+  config:
+    activate:
+      on-profile: standalone
+  autoconfigure:
+    exclude:
   mongodb:
     embedded:
       version: 5.0.5
-
